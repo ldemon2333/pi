@@ -202,8 +202,18 @@ export function compactObservation(toolName, toolInput, rawText, obsConfig, arch
     try {
       fs.mkdirSync(archiveDir, { recursive: true });
       const safeTool = normTool.replace(/[^a-z0-9_-]/g, '') || 'tool';
-      archivePath = path.join(archiveDir, `obs_${String(seq).padStart(4, '0')}_${safeTool}.log`);
-      fs.writeFileSync(archivePath, rawText, 'utf8');
+      // The lead and each delegate reader are separate processes with their own counters that share
+      // archiveDir: create exclusively and never overwrite another session's archive.
+      const base = `obs_${String(seq).padStart(4, '0')}_${safeTool}`;
+      for (let n = 0; ; n++) {
+        archivePath = path.join(archiveDir, n === 0 ? `${base}.log` : `${base}_${n}.log`);
+        try {
+          fs.writeFileSync(archivePath, rawText, { encoding: 'utf8', flag: 'wx' });
+          break;
+        } catch (err) {
+          if (!err || err.code !== 'EEXIST' || n >= 999) throw err;
+        }
+      }
       archiveNotice =
         ` Full raw output (${rawText.length} chars, ${totalLines} lines) saved to \`${archivePath}\`.` +
         ` Inspect specific ranges with read/grep, or if \`delegate\` is available, pass \`${archivePath}\` to the read-only evidence reader.`;

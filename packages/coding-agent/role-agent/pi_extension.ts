@@ -145,6 +145,8 @@ export default function (pi: any) {
         hops,
         delegates,
         tools: activeControlTools(),
+        // the tool names actually sent to the model (\`tools\` above lists only the role's control tools)
+        payload_tools: (payload.tools || []).map((t: any) => t?.name ?? t?.function?.name ?? '?'),
         read_only: Boolean(config.read_only),
         input_items: Array.isArray(payload.input) ? payload.input.length : 0,
       });

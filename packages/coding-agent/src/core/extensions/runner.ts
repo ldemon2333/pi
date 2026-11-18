@@ -1389,6 +1389,9 @@ export class ExtensionRunner {
 						error: message,
 						stack,
 					});
+					// Fail closed: sending the untransformed payload could leak a request the
+					// extension meant to rewrite or block.
+					throw new Error(`Extension ${ext.path} failed in before_provider_request: ${message}`, { cause: err });
 				}
 			}
 		}

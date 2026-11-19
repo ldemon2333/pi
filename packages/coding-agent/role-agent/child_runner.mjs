@@ -350,7 +350,9 @@ async function runChild() {
 
   const harness = spec.harness || 'pi';
   const timeoutSec = Number(spec.child_timeout || spec.timeout || 28800);
-  const workspace = spec.workspace || process.cwd();
+  // Task images differ in their working directory (some have no /app). Use the configured workspace only
+  // if it exists; otherwise the lead's own cwd, which is the agent's working directory.
+  const workspace = spec.workspace && fs.existsSync(spec.workspace) ? spec.workspace : process.cwd();
   const baseUrl = spec.base_url || process.env.ROLE_BASE_URL || 'http://127.0.0.1:4141/v1';
   const roleCfg = spec.strategy.roles[spec.role];
 
@@ -494,8 +496,12 @@ async function runChild() {
       clearTimeout(timer);
       resolve(code ?? 1);
     });
-    proc.on('error', () => {
+    proc.on('error', (err) => {
       clearTimeout(timer);
+      try {
+        fs.writeSync(errFd, `[child_runner] failed to start the child: ${err && err.message ? err.message : err}
+`);
+      } catch {}
       resolve(1);
     });
   });

@@ -235,3 +235,36 @@ export function compactObservation(toolName, toolInput, rawText, obsConfig, arch
     archivePath,
   };
 }
+
+
+// Pi's bash `timeout` is in seconds. Some models (gpt-6-luna in two thirds of its calls) pass millisecond values such
+// as 120000, which Pi reads as 33 hours, so the command effectively has no timeout. User decision 2026-11-20: say the
+// unit in the tool schema the model sees, and treat a value above the 8 h trial budget as milliseconds.
+export const MAX_BASH_TIMEOUT_SEC = 28800;
+export const BASH_TIMEOUT_DOC =
+  'Timeout in SECONDS, not milliseconds (e.g. 120 = two minutes, 1800 = thirty minutes; at most 28800). ' +
+  'Optional; no default timeout.';
+
+/** Set the bash tool's `timeout` description in a provider payload's tool list; returns how many were set. */
+export function documentBashTimeout(tools) {
+  let n = 0;
+  for (const t of tools || []) {
+    const name = t?.name ?? t?.function?.name;
+    const params = t?.parameters ?? t?.function?.parameters;
+    if (name === 'bash' && params?.properties?.timeout) {
+      params.properties.timeout = { ...params.properties.timeout, description: BASH_TIMEOUT_DOC };
+      n += 1;
+    }
+  }
+  return n;
+}
+
+/** Treat a bash `timeout` above MAX_BASH_TIMEOUT_SEC as milliseconds (in place); returns {from, to} or null. */
+export function normalizeBashTimeout(input) {
+  if (!input || input.timeout === undefined || input.timeout === null) return null;
+  const from = Number(input.timeout);
+  if (!Number.isFinite(from) || from <= MAX_BASH_TIMEOUT_SEC) return null;
+  const to = Math.min(MAX_BASH_TIMEOUT_SEC, Math.max(1, Math.round(from / 1000)));
+  input.timeout = to;
+  return { from, to };
+}

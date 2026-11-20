@@ -13,6 +13,8 @@ import {
   compactObservation,
   isWriteMutatingTool,
   checkReadOnlyBashViolation,
+  documentBashTimeout,
+  normalizeBashTimeout,
 } from './protocol.mjs';
 import { checkDelegateScope, DEFAULT_MIN_BYTES, DEFAULT_MIN_LINES } from './delegate-scope.ts';
 
@@ -134,6 +136,8 @@ export default function (pi: any) {
       for (const t of payload.tools) {
         if (controlMap[t.name]) Object.assign(t, controlMap[t.name]);
       }
+      // bash `timeout` is in seconds: say so in the schema the model sees (2026-11-20)
+      const bashTimeoutDoc = documentBashTimeout(payload.tools) > 0;
 
       const nextSnapshot = interactions(payload.input);
       log({
@@ -148,6 +152,7 @@ export default function (pi: any) {
         // the tool names actually sent to the model (\`tools\` above lists only the role's control tools)
         payload_tools: (payload.tools || []).map((t: any) => t?.name ?? t?.function?.name ?? '?'),
         read_only: Boolean(config.read_only),
+        bash_timeout_doc: bashTimeoutDoc,
         input_items: Array.isArray(payload.input) ? payload.input.length : 0,
       });
       cut = nextCut;
@@ -167,6 +172,11 @@ export default function (pi: any) {
 
   pi.on('tool_call', (event: any) => {
     const config = spec.strategy.roles[role];
+    if (event.toolName === 'bash') {
+      // a timeout above the 8 h budget is a millisecond value (Pi reads seconds): convert it in place
+      const changed = normalizeBashTimeout(event.input);
+      if (changed) log({ event: 'bash_timeout_normalized', role, from: changed.from, to: changed.to });
+    }
     if (config.read_only) {
       if (isWriteMutatingTool(event.toolName)) {
         log({
